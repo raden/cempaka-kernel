@@ -139,6 +139,7 @@ void __init lge_add_lcd_kcal_devices(void)
 	platform_device_register(&kcal_platrom_device);
 };
 
+#endif
 #ifdef CONFIG_BRICKED_THERMAL
 static struct msm_thermal_data msm_thermal_pdata = {
 	.sensor_id = 0,
