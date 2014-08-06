@@ -32,8 +32,7 @@ static DEFINE_MUTEX(emergency_shutdown_mutex);
 static int enabled;
 
 //Throttling indicator, 0=not throttled, 1=low, 2=mid, 3=max
-int bricked_thermal_throttled = 0;
-EXPORT_SYMBOL_GPL(bricked_thermal_throttled);
+static int thermal_throttled = 0;
 
 //Save the cpu max freq before throttling
 static int pre_throttled_max = 0;
@@ -70,7 +69,7 @@ static void update_stats(void)
 
 static void start_stats(int status)
 {
-    switch (bricked_thermal_throttled) {
+    switch (thermal_throttled) {
         case 1:
             msm_thermal_stats.time_low_start = ktime_to_ms(ktime_get());
             break;
@@ -132,7 +131,7 @@ static void check_temp(struct work_struct *work)
         for_each_possible_cpu(cpu) {
             update_policy = true;
             max_freq = msm_thermal_info.allowed_max_freq;
-            bricked_thermal_throttled = 3;
+            thermal_throttled = 3;
             pr_warn("msm_thermal: Emergency throttled CPU%i to %u! temp:%lu\n",
                     cpu, msm_thermal_info.allowed_max_freq, temp);
         }
@@ -148,23 +147,23 @@ static void check_temp(struct work_struct *work)
         }
 
         /* save pre-throttled max freq value */
-        if ((bricked_thermal_throttled == 0) && (cpu == 0))
+        if ((thermal_throttled == 0) && (cpu == 0))
             pre_throttled_max = cpu_policy->max;
 
         //low trip point
         if ((temp >= msm_thermal_info.allowed_low_high) &&
             (temp < msm_thermal_info.allowed_mid_high) &&
-            (bricked_thermal_throttled < 1)) {
+            (thermal_throttled < 1)) {
             update_policy = true;
             max_freq = msm_thermal_info.allowed_low_freq;
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 1;
+                thermal_throttled = 1;
                 pr_warn("msm_thermal: Thermal Throttled (low)! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
         //low clr point
         } else if ((temp < msm_thermal_info.allowed_low_low) &&
-               (bricked_thermal_throttled > 0)) {
+               (thermal_throttled > 0)) {
             if (pre_throttled_max != 0)
                 max_freq = pre_throttled_max;
             else {
@@ -178,28 +177,28 @@ static void check_temp(struct work_struct *work)
                 cpu_up(i);
             }
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 0;
+                thermal_throttled = 0;
                 pr_warn("msm_thermal: Low thermal throttle ended! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
         //mid trip point
         } else if ((temp >= msm_thermal_info.allowed_mid_high) &&
                (temp < msm_thermal_info.allowed_max_high) &&
-               (bricked_thermal_throttled < 2)) {
+               (thermal_throttled < 2)) {
             update_policy = true;
             max_freq = msm_thermal_info.allowed_mid_freq;
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 2;
+                thermal_throttled = 2;
                 pr_warn("msm_thermal: Thermal Throttled (mid)! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
         //mid clr point
         } else if ((temp < msm_thermal_info.allowed_mid_low) &&
-               (bricked_thermal_throttled > 1)) {
+               (thermal_throttled > 1)) {
             max_freq = msm_thermal_info.allowed_low_freq;
             update_policy = true;
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 1;
+                thermal_throttled = 1;
                 pr_warn("msm_thermal: Mid thermal throttle ended! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
@@ -208,23 +207,23 @@ static void check_temp(struct work_struct *work)
             update_policy = true;
             max_freq = msm_thermal_info.allowed_max_freq;
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 3;
+                thermal_throttled = 3;
                 pr_warn("msm_thermal: Thermal Throttled (max)! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
         //max clr point
         } else if ((temp < msm_thermal_info.allowed_max_low) &&
-               (bricked_thermal_throttled > 2)) {
+               (thermal_throttled > 2)) {
             max_freq = msm_thermal_info.allowed_mid_freq;
             update_policy = true;
             if (cpu == (CONFIG_NR_CPUS-1)) {
-                bricked_thermal_throttled = 2;
+                thermal_throttled = 2;
                 pr_warn("msm_thermal: Max thermal throttle ended! temp:%lu by:%u\n",
                         temp, msm_thermal_info.sensor_id);
             }
         }
         update_stats();
-        start_stats(bricked_thermal_throttled);
+        start_stats(thermal_throttled);
         if (update_policy)
             update_cpu_max_freq(cpu_policy, cpu, max_freq);
 
@@ -514,7 +513,7 @@ static ssize_t show_throttle_times(struct kobject *a, struct attribute *b,
 {
     ssize_t len = 0;
 
-    if (bricked_thermal_throttled == 1) {
+    if (thermal_throttled == 1) {
         len += sprintf(buf + len, "%s %llu\n", "low",
                        (msm_thermal_stats.time_low +
                         (ktime_to_ms(ktime_get()) -
@@ -522,7 +521,7 @@ static ssize_t show_throttle_times(struct kobject *a, struct attribute *b,
     } else
         len += sprintf(buf + len, "%s %llu\n", "low", msm_thermal_stats.time_low);
 
-    if (bricked_thermal_throttled == 2) {
+    if (thermal_throttled == 2) {
         len += sprintf(buf + len, "%s %llu\n", "mid",
                        (msm_thermal_stats.time_mid +
                         (ktime_to_ms(ktime_get()) -
@@ -530,7 +529,7 @@ static ssize_t show_throttle_times(struct kobject *a, struct attribute *b,
     } else
         len += sprintf(buf + len, "%s %llu\n", "mid", msm_thermal_stats.time_mid);
 
-    if (bricked_thermal_throttled == 3) {
+    if (thermal_throttled == 3) {
         len += sprintf(buf + len, "%s %llu\n", "max",
                        (msm_thermal_stats.time_max +
                         (ktime_to_ms(ktime_get()) -
@@ -545,7 +544,7 @@ define_one_global_ro(throttle_times);
 static ssize_t show_is_throttled(struct kobject *a, struct attribute *b,
                                  char *buf)
 {
-    return sprintf(buf, "%u\n", bricked_thermal_throttled);
+    return sprintf(buf, "%u\n", thermal_throttled);
 }
 define_one_global_ro(is_throttled);
 
