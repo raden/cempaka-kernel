@@ -137,7 +137,7 @@ static int mp_decision(void)
 
 static unsigned int calculate_thread_stats(void)
 {
-	unsigned int avg_nr_run = avg_nr_running();
+	//unsigned int avg_nr_run = avg_nr_running();
 	unsigned int nr_run;
 	unsigned int threshold_size;
 
@@ -167,8 +167,8 @@ static unsigned int calculate_thread_stats(void)
 
 		if (nr_run_last <= nr_run)
 			nr_threshold += nr_run_hysteresis;
-		if (avg_nr_run <= (nr_threshold << (FSHIFT - nr_fshift)))
-			break;
+	//	if (avg_nr_run <= (nr_threshold << (FSHIFT - nr_fshift)))
+	//		break;
 	}
 	nr_run_last = nr_run;
 
